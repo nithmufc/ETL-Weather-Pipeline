@@ -8,6 +8,7 @@ Usage
 Set-Up:
 
 Add your OpenWeatherMap API key and SQLite database connection string to a .env file.
+
 Run the Script:
 
 Execute etl_script.py to get weather data, tidy it up, and save it to the database.
