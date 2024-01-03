@@ -26,8 +26,9 @@ if not table_exists:
         CREATE TABLE weather_data (
             id INTEGER PRIMARY KEY,
             city TEXT,
-            temperature_celsius REAL,
+            temperature_avg REAL,
             humidity INTEGER,
+            precipitation REAL,
             population INTEGER,
             timestamp TEXT
         )
@@ -38,29 +39,46 @@ if not table_exists:
 
 def extract(city):
     # Make API request for weather data
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}"
+    url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}"
     response = requests.get(url)
     data = response.json()
     return data
 
 def transform(data, population):
     # Extract relevant data
-    temperature_celsius = round(data.get("main", {}).get("temp") - 273.15, 2)
-    humidity = data.get("main", {}).get("humidity")
+    temperature_sum = 0
+    humidity_sum = 0
+    precipitation_sum = 0
+
+    # Counters for hourly data
+    count = 0
+
+    # Loop through hourly data to calculate daily averages
+    for entry in data.get("list", []):
+        temperature_sum += entry.get("main", {}).get("temp", 0)
+        humidity_sum += entry.get("main", {}).get("humidity", 0)
+        precipitation_sum += entry.get("rain", {}).get("3h", 0)
+        count += 1
+
+    # Calculate daily averages
+    temperature_avg = round(temperature_sum / count - 273.15, 2) if count > 0 else 0.0
+    humidity_avg = humidity_sum / count if count > 0 else 0.0
+    precipitation_avg = precipitation_sum / count if count > 0 else 0.0
 
     # Normalize temperature to Celsius
     # Handle missing or null values
-    if temperature_celsius is None:
-        temperature_celsius = 0.0
+    if temperature_avg is None:
+        temperature_avg = 0.0
 
     # Enrich data with population
     if population is not None:
         data["population"] = population
 
     return {
-        "city": data.get("name"),
-        "temperature_celsius": temperature_celsius,
-        "humidity": humidity,
+        "city": data.get("city", {}).get("name"),
+        "temperature_avg": temperature_avg,
+        "humidity": round(humidity_avg),
+        "precipitation": precipitation_avg,
         "population": population,
         "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     }
@@ -68,16 +86,9 @@ def transform(data, population):
 def load(data):
     # Insert data into the SQLite database using placeholders
     cursor.execute('''
-        INSERT INTO weather_data (city, temperature_celsius, humidity, population, timestamp)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (data["city"], data["temperature_celsius"], data["humidity"], data["population"], data["timestamp"]))
-
-def get_weather_forecast(city):
-    # Make API request for weather forecast data
-    url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}"
-    response = requests.get(url)
-    data = response.json()
-    return data
+        INSERT INTO weather_data (city, temperature_avg, humidity, precipitation, population, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (data["city"], data["temperature_avg"], data["humidity"], data["precipitation"], data["population"], data["timestamp"]))
 
 def is_rain_forecasted(forecast_data):
     # Check if rain is forecasted for the next day
@@ -92,17 +103,17 @@ def is_rain_forecasted(forecast_data):
 def get_city_population(city):
     # Read population data from CSV
     population_df = pd.read_csv("worldcities.csv", usecols=["city", "population"])
-    
+
     # Find population data for the city
     city_population = population_df[population_df["city"] == city]
-    
+
     if not city_population.empty:
         return city_population.iloc[0]["population"]
     else:
         return None
 
 # List of cities
-cities = ["London", "Leeds", "Nottingham", "Manchester"]
+cities = ["London", "Leeds", "Nottingham", "Manchester", "Bangalore"]
 
 # Loop through cities and perform ETL
 for city in cities:
@@ -119,7 +130,7 @@ for city in cities:
     load(transformed_data)
 
     # Print message based on rain forecast
-    if is_rain_forecasted(get_weather_forecast(city)):
+    if is_rain_forecasted(extract(city)):
         print(f"Rain forecasted for {city} tomorrow!")
     else:
         print(f"No rain forecast for {city} tomorrow.")
