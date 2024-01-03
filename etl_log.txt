@@ -1,0 +1,5 @@
+ERROR:root:Error retrieving data for London from the API: 401 Client Error: Unauthorized for url: https://api.openweathermap.org/data/2.5/forecast?q=London&appid=6fdfea2755a22b43c5f7ab966b7cbb62a
+ERROR:root:Error retrieving data for Leeds from the API: 401 Client Error: Unauthorized for url: https://api.openweathermap.org/data/2.5/forecast?q=Leeds&appid=6fdfea2755a22b43c5f7ab966b7cbb62a
+ERROR:root:Error retrieving data for Nottingham from the API: 401 Client Error: Unauthorized for url: https://api.openweathermap.org/data/2.5/forecast?q=Nottingham&appid=6fdfea2755a22b43c5f7ab966b7cbb62a
+ERROR:root:Error retrieving data for Manchester from the API: 401 Client Error: Unauthorized for url: https://api.openweathermap.org/data/2.5/forecast?q=Manchester&appid=6fdfea2755a22b43c5f7ab966b7cbb62a
+ERROR:root:Error retrieving data for Bangalore from the API: 401 Client Error: Unauthorized for url: https://api.openweathermap.org/data/2.5/forecast?q=Bangalore&appid=6fdfea2755a22b43c5f7ab966b7cbb62a
