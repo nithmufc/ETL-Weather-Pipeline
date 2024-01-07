@@ -6,42 +6,78 @@ import sqlite3
 from datetime import datetime, timedelta
 import logging
 
-# Configure logging
-logging.basicConfig(filename='etl_log.txt', level=logging.ERROR)
+from email_script import send_email_function
 
-# Load environment variables from .env file
-load_dotenv()
+def main_function():
+    # Configure logging
+    logging.basicConfig(filename='etl_log.txt', level=logging.ERROR)
 
-# Load API key and database connection string from environment variables
-api_key = os.environ.get("OPENWEATHER_API_KEY")
-db_connection_string = os.environ.get("DB_CONNECTION_STRING")
+    # Load environment variables from .env file
+    load_dotenv()
 
-# SQLite database connection
-conn = sqlite3.connect(db_connection_string)
-cursor = conn.cursor()
+    # Load API key and database connection string from environment variables
+    api_key = os.environ.get("OPENWEATHER_API_KEY")
+    db_connection_string = os.environ.get("DB_CONNECTION_STRING")
 
-# Check if the weather_data table exists
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='weather_data'")
-table_exists = cursor.fetchone()
+    # SQLite database connection
+    conn = sqlite3.connect(db_connection_string)
+    cursor = conn.cursor()
 
-if not table_exists:
-    # Create a new weather_data table with the required schema
-    cursor.execute('''
-        CREATE TABLE weather_data (
-            id INTEGER PRIMARY KEY,
-            city TEXT,
-            temperature_avg REAL,
-            humidity INTEGER,
-            precipitation REAL,
-            population INTEGER,
-            timestamp TEXT
-        )
-    ''')
+    # Check if the weather_data table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='weather_data'")
+    table_exists = cursor.fetchone()
 
-    # Commit the create statement
+    if not table_exists:
+        # Create a new weather_data table with the required schema
+        cursor.execute('''
+            CREATE TABLE weather_data (
+                id INTEGER PRIMARY KEY,
+                city TEXT,
+                temperature_avg REAL,
+                humidity INTEGER,
+                precipitation REAL,
+                population INTEGER,
+                timestamp TEXT
+            )
+        ''')
+
+        # Commit the create statement
+        conn.commit()
+
+    # List of cities
+    cities = ["London", "Leeds", "Nottingham", "Manchester", "Bangalore"]
+
+    # Loop through cities and perform ETL
+    for city in cities:
+        # Extract data
+        weather_data = extract(city, api_key)
+
+        if weather_data is not None:
+            # Get population data for the city
+            city_population_value = get_city_population(city)
+
+            # Transform data
+            transformed_data = transform(weather_data, city_population_value)
+
+            if transformed_data is not None:
+                # Load data into the database
+                load(transformed_data, conn, cursor)
+
+                # Print message based on rain forecast
+                if is_rain_forecasted(extract(city, api_key)):
+                    print(f"Rain forecasted for {city} tomorrow!")
+                else:
+                    print(f"No rain forecast for {city} tomorrow.")
+
+    # Commit the changes and close the connection
     conn.commit()
+    conn.close()
 
-def extract(city):
+    # Call the email function to send weather forecast emails
+    from email_script import send_email_function, create_email_body
+    send_email_function(lambda: create_email_body(extract, api_key, is_rain_forecasted))
+
+def extract(city, api_key):
     try:
         # Make API request for weather data
         url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}"
@@ -99,7 +135,7 @@ def transform(data, population):
         logging.error(f"Error during data transformation: {e}")
         return None
 
-def load(data):
+def load(data, conn, cursor):
     try:
         # Insert data into the SQLite database using placeholders
         cursor.execute('''
@@ -141,31 +177,6 @@ def get_city_population(city):
         logging.error(f"Error while retrieving population data for {city}: {e}")
         return None
 
-# List of cities
-cities = ["London", "Leeds", "Nottingham", "Manchester", "Bangalore"]
-
-# Loop through cities and perform ETL
-for city in cities:
-    # Extract data
-    weather_data = extract(city)
-
-    if weather_data is not None:
-        # Get population data for the city
-        city_population_value = get_city_population(city)
-
-        # Transform data
-        transformed_data = transform(weather_data, city_population_value)
-
-        if transformed_data is not None:
-            # Load data into the database
-            load(transformed_data)
-
-            # Print message based on rain forecast
-            if is_rain_forecasted(extract(city)):
-                print(f"Rain forecasted for {city} tomorrow!")
-            else:
-                print(f"No rain forecast for {city} tomorrow.")
-
-# Commit the changes and close the connection
-conn.commit()
-conn.close()
+# Call the main function when the script is executed
+if __name__ == "__main__":
+    main_function()
